@@ -1,0 +1,193 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DepartureStatus {
+  CLEARED
+  BLOCKED
+}
+
+enum PassengerStatus {
+  ON_BUS_VERIFIED
+  OUTSIDE_REST_STOP
+  BOARDING_PENDING
+}
+
+enum SeatDeck {
+  LOWER
+  UPPER
+}
+
+enum VerificationLayer {
+  QR
+  CAMERA
+  GPS
+}
+
+enum VerificationResult {
+  PASS
+  FAIL
+}
+
+enum CameraStatus {
+  ON
+  OFF
+  DISCONNECTED
+}
+
+enum DetectionType {
+  MOTION
+  FACE
+  DROWSINESS
+}
+
+model Trip {
+  id                    String   @id @default(cuid())
+  tripCode              String   @unique
+  routeName             String
+  busNumber             String
+  coachType             String
+  currentStop           String
+  nextStop              String
+  targetDepartureTime   String?
+  departureStatus       DepartureStatus @default(CLEARED)
+  passengers            Passenger[]
+  seats                 Seat[]
+  cameras               CameraDevice[]
+  telemetry             TelemetrySnapshot[]
+  alerts                Alert[]
+  activityLogs          ActivityLog[]
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Passenger {
+  id             String @id @default(cuid())
+  trip           Trip   @relation(fields: [tripId], references: [id])
+  tripId         String
+  name           String
+  phone          String
+  ticketId       String
+  seatNumber     String
+  status         PassengerStatus @default(BOARDING_PENDING)
+  lastVerifiedAt DateTime?
+  verificationEvents VerificationEvent[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tripId])
+  @@unique([tripId, seatNumber])
+}
+
+model Seat {
+  id         String @id @default(cuid())
+  trip       Trip   @relation(fields: [tripId], references: [id])
+  tripId     String
+  seatNumber String
+  deck       SeatDeck
+  berthType  String
+  passenger  Passenger? @relation(fields: [passengerId], references: [id])
+  passengerId String?
+
+  @@unique([tripId, seatNumber])
+}
+
+model VerificationEvent {
+  id          String @id @default(cuid())
+  passenger   Passenger @relation(fields: [passengerId], references: [id])
+  passengerId String
+  layer       VerificationLayer
+  result      VerificationResult
+  confidence  Float
+  rawPayload  Json?
+  createdAt   DateTime @default(now())
+
+  @@index([passengerId])
+}
+
+model CameraDevice {
+  id              String @id @default(cuid())
+  trip            Trip   @relation(fields: [tripId], references: [id])
+  tripId          String
+  label           String
+  status          CameraStatus @default(DISCONNECTED)
+  lastHeartbeatAt DateTime?
+  streamUrl       String?
+  detectionEvents DetectionEvent[]
+  createdAt       DateTime @default(now())
+
+  @@index([tripId])
+}
+
+model DetectionEvent {
+  id          String @id @default(cuid())
+  camera      CameraDevice @relation(fields: [cameraId], references: [id])
+  cameraId    String
+  type        DetectionType
+  boundingBox Json?
+  confidence  Float
+  createdAt   DateTime @default(now())
+
+  @@index([cameraId])
+}
+
+model TelemetrySnapshot {
+  id               String @id @default(cuid())
+  trip             Trip   @relation(fields: [tripId], references: [id])
+  tripId           String
+  latitude         Float
+  longitude        Float
+  speedKmh         Float
+  temperatureC     Float?
+  humidity         Float?
+  weatherCondition String?
+  recordedAt       DateTime @default(now())
+
+  @@index([tripId, recordedAt])
+}
+
+model Alert {
+  id        String @id @default(cuid())
+  trip      Trip   @relation(fields: [tripId], references: [id])
+  tripId    String
+  severity  String
+  title     String
+  body      String
+  isResolved Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tripId])
+}
+
+model Notification {
+  id        String @id @default(cuid())
+  userId    String
+  message   String
+  isRead    Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+model ActivityLog {
+  id        String @id @default(cuid())
+  trip      Trip   @relation(fields: [tripId], references: [id])
+  tripId    String
+  actorType String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([tripId])
+}
+
+model User {
+  id           String @id @default(cuid())
+  name         String
+  email        String @unique
+  passwordHash String
+  role         String
+  createdAt    DateTime @default(now())
+}
